@@ -26,6 +26,7 @@ it links to in the same change.
 | D12 | Moderation | Report, block on device, word filter, host removes player, manual review | Proposed |
 | D13 | Minimum age | 13+ | Proposed |
 | D14 | Identifiers | UUIDv7 stored as `BINARY(16)` | Proposed |
+| D15 | Web target and playtests | Same Expo app also builds for web; device APIs behind platform adapters | Proposed |
 
 ## D1 Repository layout
 
@@ -195,6 +196,42 @@ IDs stay `BIGINT` cursors. Join codes are 8 characters from the Crockford base32
 alphabet (no I, L, O or U), shown as two groups of four, giving about 2^40
 codes.
 
+## D15 Web target and playtests
+
+**Choice:** The Expo app is also built for the web with `react-native-web`
+(`npx expo export --platform web`, served as static files). There is no
+separate web codebase. Screens never import device-only modules directly; they
+use small adapters in `apps/mobile/src/device` that have a native file and a
+`.web.ts` file (see [mobile app](mobile-app.md#platform-adapters)). CI
+checks that the web export builds, so web support doesn't quietly stop working.
+
+**Why:** iPhone friends can't install an `.apk`. A web link works on any phone
+with nothing to install. Building web in from the start costs little; adding it
+after screens call `expo-secure-store` or `expo-sqlite` directly means a cleanup
+pass across the app.
+
+**Web limits (accepted):** secrets stored in IndexedDB rather than the
+Keychain or Keystore; no push or local notifications (cooldown timers show in
+the app instead); history is lost if the browser's site data is cleared.
+
+**Early playtest channels**, in order of preference while the app is
+unpolished:
+
+1. **Web build:** one link for everyone; host it as static files next to the
+   API.
+2. **Expo Go:** a free app on both stores; testers open a published EAS Update
+   via a link or QR code. Works only while the app uses no custom native
+   modules, which the D6 stack doesn't.
+3. **Android `.apk`** from an EAS internal build.
+4. **TestFlight** once polish matters; needs the paid Apple Developer account.
+
+Every option needs the API and MySQL hosted somewhere the testers can reach
+([operations](operations.md#environments)); a small playtest environment is
+enough.
+
+**Alternatives:** iOS-only TestFlight (Apple account and review before the
+first playtest); a separate lightweight web app (two UIs to keep in sync).
+
 ## Open questions
 
 These do not block the first build steps, but need an answer before launch.
@@ -211,3 +248,5 @@ These do not block the first build steps, but need an answer before launch.
    returns them.
 7. Is anonymous crash reporting (Sentry) acceptable, given the privacy promise?
    Proposed: yes, with no game content or secrets in reports.
+8. For the first friend playtests, is the web build enough, or should we also
+   set up Expo Go or TestFlight ([D15](#d15-web-target-and-playtests))?

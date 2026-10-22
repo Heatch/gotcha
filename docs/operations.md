@@ -10,10 +10,13 @@ limits, monitoring, backups and capacity. Nothing is deployed yet. Choices:
 | --- | --- | --- |
 | Local | Development | MySQL 8.4 in Docker, example seed |
 | Test (CI) | Automated tests | Throwaway MySQL 8.4 container per run |
-| Staging | Pre-release checks, internal play-tests, EAS preview builds | Managed MySQL 8.4, built-in packs only |
+| Staging | Pre-release checks, friend playtests (web build, Expo Go updates, preview builds) | Managed MySQL 8.4, built-in packs only |
 | Production | Store builds | Managed MySQL 8.4, daily backups |
 
 Staging and production never share a database, secrets or push credentials.
+Staging also serves the static web build
+([D15](decisions.md#d15-web-target-and-playtests)); the API must allow that
+origin in CORS and in the Socket.IO origin check.
 
 ## Hosting requirements
 

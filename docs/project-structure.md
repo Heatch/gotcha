@@ -8,11 +8,11 @@ yet. Choices and alternatives: [D1-D4](decisions.md).
 ```text
 gotcha/
   apps/
-    mobile/              Expo app (Expo Router)
+    mobile/              Expo app (Expo Router); also builds for web (D15)
       app/               routes, one file per screen; see mobile-app.md
       src/
         api/             typed API client, TanStack Query hooks, socket client
-        device/          SQLite history, secure storage, notifications
+        device/          platform adapters: native file + .web.ts file each
         features/        screens' components grouped by feature (wallet, chat, ...)
         ui/              shared components and theme tokens
     server/              Fastify API
@@ -44,6 +44,9 @@ Rules:
   `apps/mobile`.
 - Each transaction contract in [database.md](database.md#transaction-contracts)
   becomes one service function with one integration test file.
+- Only `apps/mobile/src/device` imports Expo device modules (secure store,
+  SQLite, notifications, sharing, haptics); an ESLint `no-restricted-imports`
+  rule enforces it so the web build keeps working.
 
 ## Tooling
 
@@ -59,11 +62,11 @@ Rules:
 | Mobile end-to-end | Maestro flows for create, join, play and end (after the first build) |
 | API load tests | k6 scripts in `apps/server/load` |
 | Database types | `kysely-codegen` against a freshly migrated database |
-| Builds and releases | EAS Build, EAS Submit, EAS Update |
+| Builds and releases | EAS Build, EAS Submit, EAS Update; `expo export --platform web` for the web build |
 
 Root scripts (planned): `pnpm lint`, `pnpm typecheck`, `pnpm test`,
 `pnpm test:db`, `pnpm db:migrate`, `pnpm db:seed`, `pnpm dev:server`,
-`pnpm dev:mobile`. They do not exist yet; do not document them as runnable
+`pnpm dev:mobile`, `pnpm build:web`. They do not exist yet; do not document them as runnable
 until they do.
 
 ## Migrations
@@ -99,6 +102,7 @@ GitHub Actions on every pull request:
    including applying every migration to an empty database.
 5. Check that the generated wireframes and ERD are up to date (regenerate and
    fail on a diff).
+6. Export the mobile app for web to catch native-only imports.
 
 On merge to the main branch: build the server image and deploy to staging.
 Production deploys and store releases are manual.
@@ -112,9 +116,11 @@ A suggested order that produces something playable early:
 2. Server: create, join, snapshot, start; then offer, claim, resolve; then
    chat, end, settings edits.
 3. Mobile: home, create, join, lobby, wallet, offer, resolve against the real
-   server.
+   server, using the platform adapters from the start.
 4. Realtime events, leaderboard, chat screens.
 5. Device history, ended screen, pack saving, My packs.
+   **First friend playtest:** web build + a small hosted API and database
+   ([D15](decisions.md#d15-web-target-and-playtests)).
 6. Push and local notifications, sweeper jobs.
 7. Moderation (report, block, remove, filter), terms and privacy screens.
 8. Load tests, staging soak, store submission.

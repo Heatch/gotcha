@@ -56,6 +56,9 @@ before sending.
 
 ## Device storage
 
+All device access goes through the [platform adapters](#platform-adapters), so
+the same screens run on iOS, Android and the web.
+
 ### Secure storage
 
 `expo-secure-store` (Keychain on iOS, Keystore-backed on Android):
@@ -126,6 +129,29 @@ membership with `PUT /v1/games/{gameId}/me/notifications`, so the server never
 links games through it; it is deleted with the game. Pushes contain no mission
 text: "Lee sent a message in Friday party", not the message itself, because
 lock screens are visible to others.
+
+## Platform adapters
+
+The app also builds for the web ([D15](decisions.md#d15-web-target-and-playtests)).
+Screens and hooks import only these adapters from `src/device`, never the
+Expo device modules directly. Metro picks the `.web.ts` file for the web build.
+
+| Adapter | Native (`*.ts`) | Web (`*.web.ts`) |
+| --- | --- | --- |
+| `secrets` | `expo-secure-store` | IndexedDB (via `idb-keyval`) |
+| `history` (games, messages, results, packs, blocked players) | `expo-sqlite` | IndexedDB object stores with the same records |
+| `notifications` | `expo-notifications` local + Expo push | No-op that reports "unsupported"; screens show timers instead |
+| `share` and `clipboard` | `expo-sharing`, `expo-clipboard` | Web Share API, falling back to `navigator.clipboard` |
+| `haptics` | `expo-haptics` | No-op |
+
+Rules:
+
+- The adapter interfaces are async and return plain objects, so both versions
+  behave the same to callers. Each adapter has one shared test suite run
+  against both versions.
+- On the web, warn once that clearing browser data deletes history and game
+  access, and hide the notification settings screen.
+- New device features get an adapter before the first screen uses them.
 
 ## Theming and accessibility
 
