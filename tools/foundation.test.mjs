@@ -172,3 +172,22 @@ test('generated SVG is a real diagram containing all entity labels', () => {
   assert.ok(svg.length > 10000, 'expected rendered diagram, not placeholder');
   for (const table of expectedTables) assert.ok(svg.includes(table), table);
 });
+
+test('wireframes are generated, phone-sized, grayscale and documented', async () => {
+  const { renderAll, screens, OUTPUT_DIR } = await import('./wireframes.mjs');
+  const rendered = renderAll();
+  assert.equal(screens.length, 13);
+  const onDisk = readdirSync(path.join(root, OUTPUT_DIR)).filter((name) => name.endsWith('.svg')).sort();
+  assert.deepEqual(onDisk, [...rendered.keys()].sort(), 'no stale or missing wireframe SVGs');
+  const readme = read(`${OUTPUT_DIR}/README.md`);
+  for (const [file, svg] of rendered) {
+    assert.equal(read(`${OUTPUT_DIR}/${file}`), svg, `${file} is out of date; run node tools\\wireframes.mjs`);
+    assert.match(svg, /^<svg [^>]*viewBox="0 0 390 844"/, file);
+    assert.match(svg, /<\/svg>\s*$/, file);
+    for (const [, hex] of svg.matchAll(/#([0-9a-f]{6})\b/gi)) {
+      const [r, g, b] = [0, 2, 4].map((index) => hex.slice(index, index + 2).toLowerCase());
+      assert.ok(r === g && g === b, `${file} uses non-grayscale #${hex}`);
+    }
+    assert.match(readme, new RegExp(`\\]\\(${file.replace('.', '\\.')}\\)`), `README links ${file}`);
+  }
+});

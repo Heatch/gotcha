@@ -20,6 +20,7 @@ Do not run the SQL against an existing database.
 - [Game rules](docs/game-rules.md)
 - [Database model, lifecycle, and transaction contracts](docs/database.md)
 - [Database diagram (SVG)](docs/database.svg) and [Mermaid source](docs/database.mmd)
+- [Mobile wireframes and navigation](docs/wireframes/README.md)
 - [Initial schema](database/migrations/001_initial.sql)
 - [Illustrative catalog seed](database/seeds/001_example_catalog.sql)
 - [Project instructions](AGENTS.md)

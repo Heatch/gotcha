@@ -6,6 +6,9 @@
 - [Game rules](docs/game-rules.md) are canonical. Update them with every mechanics change.
 - [Database documentation](docs/database.md) defines SQL constraints, transaction
   obligations, data lifetimes, authorization, and validation limits.
+- [Wireframes](docs/wireframes/README.md) define screen layout and navigation.
+  Edit `tools/wireframes.mjs` and run `node tools\wireframes.mjs`; never hand-edit
+  the generated SVGs.
 - This branch has no app/API runtime. Do not invent startup commands or silently
   restore the old web/login model.
 

@@ -100,4 +100,5 @@ results and post-end pack saving. After purge there is no server recovery.
   their former owner. Orphan handling/quotas are a future operational decision,
   not an implicit expiry of explicitly saved packs.
 
-See [game rules](game-rules.md) and [transaction contracts](database.md#transaction-contracts).
+See [game rules](game-rules.md), [transaction contracts](database.md#transaction-contracts)
+and [mobile wireframes](wireframes/README.md).
