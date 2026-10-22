@@ -17,10 +17,16 @@ Do not run the SQL against an existing database.
 ## Start here
 
 - [Architecture and scope](docs/architecture.md)
+- [Decisions and open questions](docs/decisions.md)
 - [Game rules](docs/game-rules.md)
 - [Database model, lifecycle, and transaction contracts](docs/database.md)
 - [Database diagram (SVG)](docs/database.svg) and [Mermaid source](docs/database.mmd)
 - [Mobile wireframes and navigation](docs/wireframes/README.md)
+- [API contract](docs/api.md) and [realtime events](docs/realtime.md)
+- [Mobile app plan](docs/mobile-app.md)
+- [Project structure and tooling](docs/project-structure.md)
+- [Operations](docs/operations.md)
+- [Trust, safety and privacy](docs/trust-and-safety.md)
 - [Initial schema](database/migrations/001_initial.sql)
 - [Illustrative catalog seed](database/seeds/001_example_catalog.sql)
 - [Project instructions](AGENTS.md)

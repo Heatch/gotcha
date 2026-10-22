@@ -11,6 +11,11 @@
   the generated SVGs.
 - This branch has no app/API runtime. Do not invent startup commands or silently
   restore the old web/login model.
+- [Decisions](docs/decisions.md) record the chosen stack; follow them and update
+  the entry (and its status) before deviating. [API](docs/api.md),
+  [realtime](docs/realtime.md), [mobile app](docs/mobile-app.md),
+  [project structure](docs/project-structure.md), [operations](docs/operations.md)
+  and [trust and safety](docs/trust-and-safety.md) are the build plans.
 
 ## Target implementation conventions
 
@@ -22,8 +27,9 @@
 - Use native styles, centralized light/dark theme tokens, accessible controls,
   and an Expo-compatible Material Symbols implementation when UI is introduced.
   Do not carry over DOM/CSS/browser-storage assumptions. No decorative emojis.
-- Future API envelopes: `{ success: true, data }` or
-  `{ success: false, message }`, with appropriate HTTP status codes.
+- API envelopes: `{ success: true, data }` or
+  `{ success: false, code, message }` with a stable error code from
+  [the API contract](docs/api.md#errors) and the matching HTTP status.
   Validate inputs, expose loading/error states, and never silently swallow errors.
 - Authorize using per-game/per-pack secrets, not nicknames, codes or record IDs.
   Never log/store raw bearer secrets server-side or commit credentials.

@@ -3,9 +3,12 @@
 ## Product boundary
 
 Gotcha will use an Expo/React Native TypeScript application, a Node.js API, and
-MySQL 8.4 LTS/InnoDB. This phase supplies schema and documentation only. It does
-not select an ORM, navigation library, hosting platform, realtime scaling
-provider, or implement a replacement runtime.
+MySQL 8.4 LTS/InnoDB. This phase supplies schema and documentation only; no
+runtime is implemented. The proposed stack (Fastify, Kysely, Socket.IO, Expo
+Router, hosting direction) is recorded in [decisions](decisions.md), with the
+[API contract](api.md), [realtime events](realtime.md),
+[project structure](project-structure.md), [mobile app](mobile-app.md),
+[operations](operations.md) and [trust and safety](trust-and-safety.md) plans.
 
 The previous web app and backend have been intentionally removed, including
 Firebase/Firestore and deployment configuration. No live cloud service was
@@ -102,8 +105,8 @@ results and post-end pack saving. After purge there is no server recovery.
   short transactions; no per-game DDL or process-global game cache.
 - Parameterized SQL, connection pooling, deadlock-safe retries with stable
   idempotency keys, and authorization on every read/write/subscription.
-- Authenticated game rooms and owner-only private events. Realtime transport and
-  cross-instance delivery are not chosen here; never rely on one API process
+- Authenticated game rooms and owner-only private events. Realtime transport is
+  proposed in [realtime](realtime.md); never rely on one API process
   holding authoritative state.
 - Admission, message, pack and request limits; metrics and load tests must be
   designed before launch. Schema alone does not prove scalability.

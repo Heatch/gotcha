@@ -419,6 +419,24 @@ Saved private packs have no game/saver foreign key and survive. When row cleanup
 is delayed, every API read/write/subscription must still reject expired access.
 Log/backup retention is a separate operations requirement.
 
+## Planned schema additions
+
+Required by proposed decisions ([D11](decisions.md#d11-push-notifications),
+[D12](decisions.md#d12-moderation)) and the [API](api.md#idempotency). They are
+**not** in `001_initial.sql` yet. Once the decisions are accepted, add them to
+`001_initial.sql` if it is still undeployed, otherwise as `002_...sql`, using
+the [database-change workflow](../.github/skills/database-change/SKILL.md).
+
+| Change | Columns / shape | Purpose |
+| --- | --- | --- |
+| `game_players` removal | `membership_state ENUM('active','removed') NOT NULL DEFAULT 'active'`, `removed_at DATETIME(3) NULL`, CHECK that they agree | Host removes a player; removed members are excluded from roster counts, targets and the leaderboard |
+| `game_players` notifications | `push_token VARCHAR(255) NULL`, `notify_chat BOOLEAN NOT NULL DEFAULT TRUE` | Per-membership push, deleted with the game |
+| `game_messages` chat retry | `client_message_id VARCHAR(64) CHARACTER SET ascii NULL`, unique `(game_id, sender_player_id, client_message_id)`, required for `chat` | Retry-safe chat without a receipt per message |
+| `game_messages` kind | Add `player_removed` (no sender, text) | Announce a removal |
+| `mutation_receipts` actions | Add `remove_player`, `report` | Retry-safe removal and reporting |
+| New `content_reports` | `id`, `game_id` (no foreign key), `reporter_player_id` (no foreign key), `subject ENUM('message','player','mission')`, `reason ENUM(...)`, `details VARCHAR(500)`, `content_snapshot VARCHAR(2000)`, `subject_nickname VARCHAR(32)`, `status ENUM('open','actioned','dismissed')`, `created_at`, `reviewed_at`; index `(status, created_at)` | Reports outlive the game purge for 90 days |
+| Runner-owned `schema_migrations` | `name`, `sha256`, `applied_at` | Created by the migration runner, not by a migration ([project structure](project-structure.md#migrations)) |
+
 ## Validation
 
 `node --test tools\foundation.test.mjs` checks repository retirement, instruction
