@@ -8,6 +8,8 @@ description: 'Use when changing Gotcha MySQL tables, migrations, seed SQL, datab
 1. Read [database documentation](../../../docs/database.md) and
    [game rules](../../../docs/game-rules.md). Confirm whether a behavior change
    affects game secrecy, per-game isolation, private pack ownership or expiry.
+   Rule changes belong in `game_settings` with a default that preserves current
+   behavior; keep CHECK ranges, docs defaults and wireframes aligned.
 2. Update the initial migration only while undeployed; otherwise add the next
    numbered migration. Preserve MySQL 8.4/InnoDB compatibility, composite
    game-scoped foreign keys and explicit cleanup order.

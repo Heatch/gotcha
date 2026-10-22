@@ -271,6 +271,43 @@ function rankRow(y, { rank, name, score, own = false, h = 44 }) {
     + text(356, y + h / 2 + 5, score, { size: 14, weight: 700, anchor: 'end', fill: C.ink });
 }
 
+function toggle(x, y, on) {
+  return rect(x, y, 46, 26, { fill: on ? C.dark : C.fill, stroke: on ? C.dark : C.muted, r: 13 })
+    + `<circle cx="${on ? x + 33 : x + 13}" cy="${y + 13}" r="10" fill="${C.paper}" stroke="${on ? C.dark : C.muted}"/>`;
+}
+
+function stepper(rightX, y, value) {
+  const x = rightX - 112;
+  return rect(x, y, 112, 32, { fill: C.paper, stroke: C.ink, r: 8 })
+    + `<line x1="${x + 34}" y1="${y}" x2="${x + 34}" y2="${y + 32}" stroke="${C.line}"/>`
+    + `<line x1="${x + 78}" y1="${y}" x2="${x + 78}" y2="${y + 32}" stroke="${C.line}"/>`
+    + text(x + 17, y + 22, '−', { size: 16, weight: 700, fill: C.ink, anchor: 'middle' })
+    + text(x + 56, y + 21, value, { size: 13, weight: 700, fill: C.ink, anchor: 'middle' })
+    + text(x + 95, y + 22, '+', { size: 16, weight: 700, fill: C.ink, anchor: 'middle' });
+}
+
+// control: 'chevron' (value + ›), 'on'/'off' (toggle), 'stepper' (value in stepper), 'locked' (value + Locked badge)
+function settingRow(y, { title, meta, value = '', control = 'chevron', h = 52 }) {
+  const locked = control === 'locked';
+  const parts = [
+    rect(20, y, 350, h, { fill: locked ? C.soft : C.paper, stroke: C.line, dash: locked ? '4 3' : undefined, r: 10 }),
+    text(34, meta ? y + 22 : y + h / 2 + 5, title, { size: 14, weight: 600, fill: locked ? C.body : C.ink }),
+    meta ? text(34, y + 40, meta, { size: 12, fill: C.muted }) : '',
+  ];
+  if (control === 'chevron') {
+    parts.push(text(338, y + h / 2 + 5, value, { size: 13, weight: 600, fill: C.body, anchor: 'end' }));
+    parts.push(text(356, y + h / 2 + 6, '›', { size: 20, fill: C.ink, anchor: 'end' }));
+  } else if (control === 'on' || control === 'off') {
+    parts.push(toggle(312, y + h / 2 - 13, control === 'on'));
+  } else if (control === 'stepper') {
+    parts.push(stepper(358, y + h / 2 - 16, value));
+  } else if (locked) {
+    parts.push(text(290, y + h / 2 + 5, value, { size: 13, weight: 600, fill: C.body, anchor: 'end' }));
+    parts.push(badge(358, y + h / 2 - 11, 'Locked'));
+  }
+  return parts.join('');
+}
+
 function frame({ title, description, body }) {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" font-family="${FONT}" role="img" aria-labelledby="title desc">`,
@@ -313,7 +350,7 @@ export const screens = [
   {
     file: '02-create-game.svg',
     title: 'Create game',
-    description: 'Host chooses a nickname and a single mission pack source, optionally edits the copy, then creates the lobby.',
+    description: 'Host chooses a nickname, a single mission pack source and game settings (defaults pre-selected), then creates the lobby.',
     body: () => [
       statusBar(),
       header({ title: 'Create game', back: true }),
@@ -323,18 +360,20 @@ export const screens = [
       radioRow(292, { title: 'Example social pack', meta: '8 missions', selected: true }),
       radioRow(352, { title: 'Party classics', meta: '40 missions' }),
       radioRow(412, { title: 'Office safe', meta: '30 missions' }),
-      rect(20, 482, 350, 112, { fill: C.soft, stroke: C.line, r: 10 }),
-      text(34, 506, 'This game gets its own copy', { size: 14, weight: 700, fill: C.ink }),
-      text(34, 526, 'You can edit the copy until you start. It freezes when the game starts.', { size: 12, fill: C.body, width: 320 }),
-      button(34, 546, 150, 'Edit pack copy', { h: 36 }),
-      note(20, 612, 350, 'My packs lists private packs saved on this device. Blank opens the pack editor with an empty draft. Only the host can edit.'),
-      button(20, 770, 350, 'Create game', { variant: 'primary', h: 48 }),
+      rect(20, 476, 350, 108, { fill: C.soft, stroke: C.line, r: 10 }),
+      text(34, 500, 'This game gets its own copy', { size: 14, weight: 700, fill: C.ink }),
+      text(34, 518, 'You can edit the copy until you start. It freezes when the game starts.', { size: 12, fill: C.body, width: 320 }),
+      button(34, 542, 150, 'Edit pack copy', { h: 32 }),
+      section(604, 'GAME SETTINGS'),
+      settingRow(614, { title: 'Game settings', meta: '5 slots · 5m doubling · anon board', value: 'Defaults', h: 56 }),
+      note(20, 684, 350, 'My packs lists private packs saved on this device; Blank opens an empty draft. Settings start on defaults and stay editable until Start.'),
+      button(20, 778, 350, 'Create game', { variant: 'primary', h: 48 }),
     ].join(''),
   },
   {
     file: '03-pack-editor.svg',
     title: 'Pack editor',
-    description: 'Host-only editor for the game draft pack or a private saved pack: title, description, ordered missions.',
+    description: 'Host-only editor for the game draft pack or a private saved pack: title, description, ordered missions with a Group OK flag.',
     body: () => [
       statusBar(),
       header({ title: 'Edit pack', back: true, actions: [{ label: 'Done' }] }),
@@ -343,22 +382,23 @@ export const screens = [
       section(282, 'MISSIONS (8)'),
       button(290, 264, 80, '+ Add', { h: 30 }),
       ...[
-        'Get someone to compliment your hair',
-        'Get someone to dab',
-        'Make someone say moist in a sentence',
-        'Start a congo line (min 3 people)',
-        'Get someone to tell you their star sign',
-        'Get someone to sing Wheels on the Bus',
-      ].map((mission, index) => {
+        ['Get someone to compliment your hair', false],
+        ['Get someone to dab', false],
+        ['Make someone say moist in a sentence', false],
+        ['Start a congo line (min 3 people)', true],
+        ['Get someone to tell you their star sign', false],
+        ['Get someone to sing Wheels on the Bus', true],
+      ].map(([mission, group], index) => {
         const y = 296 + index * 50;
         return rect(20, y, 350, 44, { fill: C.paper, stroke: C.line, r: 8 })
           + text(32, y + 27, '::', { size: 14, weight: 700, fill: C.muted })
-          + text(52, y + 27, `${index + 1}.`, { size: 13, weight: 700, fill: C.ink })
-          + text(74, y + 27, mission, { size: 13, fill: C.ink })
+          + text(52, y + (group ? 21 : 27), `${index + 1}.`, { size: 13, weight: 700, fill: C.ink })
+          + text(74, y + (group ? 21 : 27), mission, { size: 13, fill: C.ink })
+          + (group ? text(74, y + 36, 'GROUP OK', { size: 9, weight: 700, fill: C.muted }) : '')
           + text(356, y + 27, 'Edit', { size: 12, weight: 600, fill: C.ink, anchor: 'end' });
       }),
       text(195, 610, '+ 2 more missions', { size: 12, fill: C.muted, anchor: 'middle' }),
-      note(20, 624, 350, 'Host only. Other players never see this list during the game. Starting freezes a snapshot; later edits do not change that game. Swipe or long-press a row to delete; drag :: to reorder.'),
+      note(20, 624, 350, 'Host only; hidden from players during the game. Starting freezes a snapshot. Swipe to delete, drag :: to reorder. Edit has a "Group target OK" toggle for missions like the congo line.'),
       button(20, 732, 350, 'Save copy to My packs'),
       text(195, 798, 'Optional. Keeps a private copy on this device for future games.', { size: 12, fill: C.muted, anchor: 'middle' }),
     ].join(''),
@@ -385,7 +425,7 @@ export const screens = [
   {
     file: '05-game-lobby.svg',
     title: 'Game lobby',
-    description: 'Game screen in lobby state: join code sharing, roster, host-only pack editing and start.',
+    description: 'Game screen in lobby state: join code sharing, roster, settings summary, host-only pack/settings editing and start.',
     body: () => [
       statusBar(),
       header({ title: 'Friday party', back: true, actions: [{ label: 'Rules' }] }),
@@ -403,26 +443,30 @@ export const screens = [
           + text(62, y + 26, name, { size: 14, weight: 600, fill: C.ink })
           + (role ? badge(358, y + 10, role, { filled: true }) : '');
       }),
-      section(504, 'PACK'),
+      section(504, 'PACK & SETTINGS'),
       rect(20, 514, 350, 56, { fill: C.paper, stroke: C.line, r: 10 }),
       text(34, 538, 'Example social pack', { size: 14, weight: 600, fill: C.ink }),
       text(34, 556, '8 missions · host only', { size: 12, fill: C.muted }),
       button(272, 524, 86, 'Edit', { h: 36 }),
-      note(20, 584, 350, 'Non-host view hides Edit and Start and shows "Waiting for the host to start". Players see nicknames only. When started, this screen becomes the wallet.'),
-      button(20, 712, 350, 'Start game', { variant: 'primary', h: 48 }),
-      text(195, 784, 'Players can still join after the game starts.', { size: 12, fill: C.muted, anchor: 'middle' }),
+      rect(20, 578, 350, 56, { fill: C.paper, stroke: C.line, r: 10 }),
+      text(34, 602, 'Game settings', { size: 14, weight: 600, fill: C.ink }),
+      text(34, 620, '5 slots · cycle everyone · no end', { size: 12, fill: C.muted }),
+      button(272, 588, 86, 'Edit', { h: 36 }),
+      note(20, 648, 350, 'Players see View (read-only rules) instead of Edit, no Start, and "Waiting for the host to start". When started, this screen becomes the wallet.'),
+      button(20, 752, 350, 'Start game', { variant: 'primary', h: 48 }),
+      text(195, 822, 'Late joining is on · no player limit', { size: 12, fill: C.muted, anchor: 'middle' }),
     ].join(''),
   },
   {
     file: '06-wallet.svg',
     title: 'Wallet',
-    description: 'Main in-game screen: score, five mission slots with open, empty and cooldown states, wallet history, header actions.',
+    description: 'Main in-game screen: score, end conditions, mission slots (default five) with open, empty and cooldown states, wallet history, header actions.',
     body: () => [
       statusBar(),
       header({ title: 'Friday party', back: true, actions: [{ label: 'Board' }, { label: 'Chat', dot: true }, { label: 'Rules' }, { label: '...' }] }),
       rect(20, 110, 350, 42, { fill: C.soft, stroke: null, r: 8 }),
       text(34, 137, 'Score 3', { size: 16, weight: 800, fill: C.ink }),
-      text(356, 137, 'You: Sam · Game active', { size: 12, fill: C.muted, anchor: 'end' }),
+      text(356, 137, 'Ends in 3h 12m · First to 10 pts', { size: 12, fill: C.muted, anchor: 'end' }),
       section(176, 'YOUR MISSIONS (3 OF 5 SLOTS FILLED)'),
       slotCard(186, { slot: 1, state: 'open', mission: 'Get someone to tell you their star sign' }),
       slotCard(266, { slot: 2, state: 'open', mission: 'Get someone to beatbox for 5 seconds' }),
@@ -432,7 +476,7 @@ export const screens = [
       section(606, 'WALLET HISTORY'),
       historyRow(616, { status: 'COMPLETED · GOT LEE', mission: 'Get someone to dab' }),
       historyRow(670, { status: 'FAILED', mission: 'Start a congo line (min 3 people)' }),
-      note(20, 730, 350, 'Resolve opens the resolution sheet. Board and Chat open bottom sheets. "..." holds End game for the host. Other players\' missions are never shown.'),
+      note(20, 730, 350, 'Board is hidden when the leaderboard is off. "..." holds Game settings (players view only) and the host\'s End game. Slots are a setting (1-10). Other players\' missions are never shown.'),
     ].join(''),
   },
   {
@@ -448,24 +492,24 @@ export const screens = [
       segmented(20, 338, 350, ['Success', 'Fail'], 0),
       text(20, 404, 'Who did you get?', { size: 14, weight: 700, fill: C.ink }),
       chips(20, 416, 350, [
-        { label: 'Group' }, { label: 'Lee', selected: true }, { label: 'Ari · got', disabled: true },
+        { label: 'Lee', selected: true }, { label: 'Ari · got', disabled: true },
         { label: 'Jo' }, { label: 'Max · got', disabled: true }, { label: 'Kim' },
       ]),
-      text(20, 520, 'Get everyone once before repeating. Group always OK.', { size: 12, fill: C.muted, width: 350 }),
+      text(20, 520, 'Rule: get everyone once before repeating (4 of 6 left).', { size: 12, fill: C.muted, width: 350 }),
       input(20, 556, 350, 'HOW DID YOU PULL IT OFF? (OPTIONAL)', 'Asked what we should all get matching...', { h: 56 }),
       text(20, 650, 'This cannot be undone. The slot starts its cooldown.', { size: 12, weight: 700, fill: C.ink }),
       button(20, 666, 120, 'Cancel', { h: 46 }),
       button(152, 666, 218, 'Confirm success', { variant: 'primary', h: 46 }),
-      note(20, 728, 350, 'Fail hides target and comment and shows "Confirm fail". Both outcomes post a result to chat and move the card to wallet history.'),
+      note(20, 728, 350, 'A Group chip appears only for Group OK missions. The hint follows the target rule. Fail hides target and comment and warns "-1 point" when failure scoring is on.'),
     ].join(''),
   },
   {
     file: '08-mission-offer.svg',
     title: 'Mission offer selection',
-    description: 'Choose one of up to two offered missions for an empty slot, with one-left and pool-exhausted variants.',
+    description: 'Choose one of the offered missions (offer size 1-3, default two) for an empty slot, optional reroll, with one-left and pool-exhausted variants.',
     body: () => [
       statusBar(),
-      header({ title: 'Pick a mission', back: true }),
+      header({ title: 'Pick a mission', back: true, actions: [{ label: 'Reroll · 1 left' }] }),
       text(20, 132, 'Slot 4 · choose one. The other returns to the pool.', { size: 14, fill: C.body }),
       ...[['OPTION A', 'Get someone to sing Wheels on the Bus'], ['OPTION B', 'Get someone to whisper anything in your ear']]
         .map(([label, mission], index) => {
@@ -484,47 +528,50 @@ export const screens = [
       text(212, 534, 'No missions left', { size: 14, weight: 700, fill: C.ink }),
       text(212, 556, 'Every mission in this pack has been handed out. Empty slots stay empty; keep playing the ones you have.', { size: 12, fill: C.body, width: 146 }),
       button(212, 662, 146, 'Back to wallet', { h: 34 }),
-      note(20, 726, 350, 'Offers are not reserved. If another player claims an option first, show "That mission was just taken" and refresh the offer.'),
+      note(20, 726, 350, 'Offer size is a setting (1-3). Reroll swaps the whole offer and shows only when rerolls are on (default 0). If someone claims an option first, show "That mission was just taken" and refresh.'),
     ].join(''),
   },
   {
     file: '09-leaderboard-sheet.svg',
     title: 'Leaderboard sheet',
-    description: 'Bottom sheet over the wallet ranking random game-local aliases by completed missions.',
+    description: 'Bottom sheet over the wallet ranking players by score; anonymous aliases by default, with a nicknames-mode variant.',
     body: () => [
       walletBackdrop(),
       scrim(),
       sheet(190, 'Leaderboard'),
-      text(20, 262, 'Score = completed missions', { size: 12, fill: C.muted }),
-      rankRow(278, { rank: '1', name: 'CheeryTiger42', score: '6' }),
-      rankRow(330, { rank: '2', name: 'RustyFalcon17 (you)', score: '4', own: true }),
-      rankRow(382, { rank: '3', name: 'SunnyDolphin83', score: '3' }),
-      rankRow(434, { rank: '3', name: 'QuietOtter55', score: '3' }),
-      rankRow(486, { rank: '5', name: 'BraveLynx08', score: '1' }),
-      rankRow(538, { rank: '6', name: 'MellowCrane71', score: '0' }),
-      text(195, 616, 'Names are anonymous. Keep yours secret!', { size: 13, weight: 600, fill: C.body, anchor: 'middle' }),
-      note(20, 640, 350, 'Aliases are random per game and differ from roster/chat nicknames. Ties share a rank. In ended games this shows the final standings.'),
+      text(20, 262, 'Anonymous · score = points (1 per completed mission)', { size: 12, fill: C.muted }),
+      rankRow(276, { rank: '1', name: 'CheeryTiger42', score: '6', h: 40 }),
+      rankRow(322, { rank: '2', name: 'RustyFalcon17 (you)', score: '4', own: true, h: 40 }),
+      rankRow(368, { rank: '3', name: 'SunnyDolphin83', score: '3', h: 40 }),
+      rankRow(414, { rank: '3', name: 'QuietOtter55', score: '3', h: 40 }),
+      rankRow(460, { rank: '5', name: 'BraveLynx08', score: '1', h: 40 }),
+      text(195, 530, 'Names are anonymous. Keep yours secret!', { size: 13, weight: 600, fill: C.body, anchor: 'middle' }),
+      note(20, 548, 350, 'Aliases are random per game. Mode is a setting: anonymous (default), nicknames, or off (Board button hidden). After the game ends everyone sees nicknames.'),
+      variantPanel(20, 644, 350, 176, 'VARIANT: NICKNAMES MODE'),
+      rankRow(682, { rank: '1', name: 'Lee', score: '6', h: 38 }),
+      rankRow(724, { rank: '2', name: 'Sam (you)', score: '4', own: true, h: 38 }),
+      rankRow(766, { rank: '3', name: 'Ari', score: '3', h: 38 }),
     ].join(''),
   },
   {
     file: '10-chat-sheet.svg',
     title: 'Chat sheet',
-    description: 'Bottom sheet over the wallet with member chat and system mission results.',
+    description: 'Bottom sheet over the wallet with member chat, result posts under the leaderboard identity, and settings-change posts.',
     body: () => {
       const parts = [walletBackdrop(), scrim(), sheet(130, 'Chat')];
       let y = 196;
       const messages = [
-        { kind: 'system', body: 'Lee completed "Get someone to dab" and got Ari.', meta: 'Comment: asked about dance crazes' },
+        { kind: 'system', label: 'RESULT', body: 'CheeryTiger42 completed "Get someone to dab" and got SunnyDolphin83.', meta: 'Comment: asked about dance crazes' },
         { kind: 'other', author: 'Jo', body: 'who got me earlier??' },
+        { kind: 'system', label: 'SETTINGS', body: 'Host changed settings: the game now ends at 11:30 pm.' },
         { kind: 'own', author: 'Sam', body: 'not telling' },
-        { kind: 'system', body: 'Ari failed "Start a congo line (min 3 people)".' },
-        { kind: 'other', author: 'Ari', body: 'nobody wanted to dance' },
+        { kind: 'system', label: 'RESULT', body: 'QuietOtter55 failed "Start a congo line (min 3 people)".' },
       ];
       for (const message of messages) {
         if (message.kind === 'system') {
           const h = textHeight(message.body, 300, 13) + (message.meta ? 42 : 26);
           parts.push(rect(20, y, 350, h, { fill: C.soft, stroke: C.line, dash: '4 3', r: 10 }));
-          parts.push(text(34, y + 16, 'RESULT', { size: 9, weight: 700, fill: C.muted }));
+          parts.push(text(34, y + 16, message.label, { size: 9, weight: 700, fill: C.muted }));
           parts.push(text(34, y + 32, message.body, { size: 13, weight: 600, fill: C.ink, width: 300 }));
           if (message.meta) parts.push(text(34, y + h - 12, message.meta, { size: 12, italic: true, fill: C.muted }));
           y += h + 12;
@@ -539,7 +586,7 @@ export const screens = [
           y += h + 12;
         }
       }
-      parts.push(note(20, 646, 350, 'Members only; nicknames are shown here, not aliases. Ended games replace the composer with "Chat is read-only".'));
+      parts.push(note(20, 646, 350, 'Messages show nicknames; result posts use the leaderboard identity (aliases here, nicknames once ended). Chat off = read-only feed of results with no composer.'));
       parts.push(`<line x1="0" y1="752" x2="${WIDTH}" y2="752" stroke="${C.line}"/>`);
       parts.push(rect(20, 768, 262, 44, { fill: C.paper, stroke: C.line, r: 22 }));
       parts.push(text(38, 795, 'Message the group', { size: 14, fill: C.muted }));
@@ -550,43 +597,46 @@ export const screens = [
   {
     file: '11-rules.svg',
     title: 'Rules and help',
-    description: 'How to play, reachable from home, lobby and wallet.',
+    description: 'How to play plus this game\'s actual settings, reachable from home, lobby and wallet.',
     body: () => {
       const parts = [statusBar(), header({ title: 'How to play', back: true })];
       const sections = [
         ['Goal', 'Get other players to do the thing on your secret mission without them realising.'],
-        ['Slots', 'You hold up to five missions. Pick one of two offered missions to fill a slot.'],
-        ['Success', 'Mark who you got, or Group. You must get everyone once before repeating someone.'],
-        ['Failure', 'Called out or it did not work? Mark it failed. Results cannot be undone.'],
+        ['Slots', 'You hold up to 5 missions. Pick one of 2 offered missions to fill a slot.'],
+        ['Success', 'Mark who you got (or Group, if the mission allows it). Get everyone once before repeating someone.'],
+        ['Failure', 'Called out or it did not work? Mark it failed (0 points). Results cannot be undone.'],
         ['Cooldowns', 'Each result empties its slot for a while: 5, 10, 20 min and so on, up to 6 hours.'],
-        ['Scores', 'One point per completed mission. The leaderboard uses anonymous names.'],
+        ['Scores', 'One point per completed mission. The leaderboard uses anonymous names until the end.'],
         ['Secrets', 'Never show your missions. Each mission is handed out only once per game.'],
         ['Ending', 'The host ends the game. Results stay available to sync for 7 days.'],
       ];
-      let y = 128;
+      let y = 124;
+      parts.push(text(20, y, 'Numbers below are this game\'s settings.', { size: 12, italic: true, fill: C.muted }));
+      y += 30;
       for (const [title, body] of sections) {
         parts.push(text(20, y, title, { size: 15, weight: 700, fill: C.ink }));
         parts.push(text(20, y + 20, body, { size: 13, fill: C.body, width: 350 }));
-        y += 20 + textHeight(body, 350, 13) + 20;
+        y += 20 + textHeight(body, 350, 13) + 18;
       }
-      parts.push(text(195, Math.max(y + 12, 810), 'Honour system: play fair to keep it fun.', { size: 12, italic: true, fill: C.muted, anchor: 'middle' }));
+      parts.push(button(20, y, 350, 'View all game settings', { h: 40 }));
+      parts.push(text(195, Math.max(y + 64, 810), 'Honour system: play fair to keep it fun.', { size: 12, italic: true, fill: C.muted, anchor: 'middle' }));
       return parts.join('');
     },
   },
   {
     file: '12-game-ended.svg',
     title: 'Game ended summary',
-    description: 'Ended game: final standings, own results, sync window, and opt-in full pack save. Also used for past-game detail.',
+    description: 'Ended game: end reason, final standings revealed with nicknames, own results, sync window, and opt-in full pack save. Also used for past-game detail.',
     body: () => [
       statusBar(),
       header({ title: 'Beach day', back: true, actions: [{ label: 'Chat' }] }),
       rect(20, 110, 350, 54, { fill: C.soft, stroke: C.line, r: 10 }),
-      text(34, 133, 'Game ended 12 Oct', { size: 15, weight: 700, fill: C.ink }),
+      text(34, 133, 'Lee reached 10 points · ended 12 Oct', { size: 15, weight: 700, fill: C.ink }),
       text(34, 152, 'Results can sync for 6 more days, then stay only on this device.', { size: 12, fill: C.body }),
-      section(190, 'FINAL LEADERBOARD'),
-      rankRow(200, { rank: '1', name: 'CheeryTiger42', score: '6', h: 38 }),
-      rankRow(244, { rank: '2', name: 'RustyFalcon17 (you)', score: '4', own: true, h: 38 }),
-      rankRow(288, { rank: '3', name: 'SunnyDolphin83', score: '3', h: 38 }),
+      section(190, 'FINAL LEADERBOARD · NAMES REVEALED'),
+      rankRow(200, { rank: '1', name: 'Lee · was CheeryTiger42', score: '10', h: 38 }),
+      rankRow(244, { rank: '2', name: 'Sam (you) · was RustyFalcon17', score: '7', own: true, h: 38 }),
+      rankRow(288, { rank: '3', name: 'Ari · was SunnyDolphin83', score: '5', h: 38 }),
       text(195, 344, 'See all 7 players', { size: 13, weight: 600, fill: C.ink, anchor: 'middle' }),
       section(372, 'YOUR MISSIONS'),
       historyRow(382, { status: 'COMPLETED · GOT LEE', mission: 'Get someone to dab' }),
@@ -597,7 +647,7 @@ export const screens = [
       text(36, 602, 'Keep a private copy of all 12 missions for future games. Saving shows you the full list, but never who had which mission.', { size: 12, fill: C.body, width: 318 }),
       button(36, 648, 150, 'Save pack', { variant: 'primary', h: 38 }),
       button(198, 648, 156, 'Not now', { h: 38 }),
-      note(20, 716, 350, 'Past games on Home open this layout from device history. Saving and syncing end when the 7 days are up. If final results never downloaded, show "Incomplete results".'),
+      note(20, 716, 350, 'Other end reasons: "Time\'s up" and "Host ended the game". Past games on Home reopen this from device history. Saving and syncing end after 7 days; missing final results show "Incomplete results".'),
     ].join(''),
   },
   {
@@ -628,6 +678,125 @@ export const screens = [
       button(56, 588, 130, 'Cancel', { h: 36 }),
       button(198, 588, 136, 'Delete', { variant: 'primary', h: 36 }),
       note(20, 666, 350, 'Each pack is controlled by a secret key kept on this device. Clearing app data or losing the phone loses access; there is no account recovery. Use starts Create game with a copy of the pack.'),
+    ].join(''),
+  },
+  {
+    file: '14-game-settings.svg',
+    title: 'Game settings',
+    description: 'Settings overview from Create game, lobby or the in-game menu: wallet steppers, rule groups, joining, and the in-play locked variant.',
+    body: () => [
+      statusBar(),
+      header({ title: 'Game settings', back: true, actions: [{ label: 'Reset' }, { label: 'Done' }] }),
+      text(20, 124, 'Defaults shown. Changes apply to this game only.', { size: 13, fill: C.body }),
+      section(150, 'WALLET'),
+      settingRow(160, { title: 'Slots', meta: 'Missions held at once', value: '5', control: 'stepper' }),
+      settingRow(218, { title: 'Missions per offer', meta: 'Choices when filling a slot', value: '2', control: 'stepper' }),
+      settingRow(276, { title: 'Rerolls per player', meta: 'Swap a mission offer · whole game', value: '0', control: 'stepper' }),
+      section(348, 'RULES'),
+      settingRow(358, { title: 'Cooldowns', meta: '5m, doubling, cap 6h · fails count' }),
+      settingRow(416, { title: 'Targets', meta: 'Cycle everyone' }),
+      settingRow(474, { title: 'Scoring & ending', meta: 'Fail = 0 pts · host ends the game' }),
+      settingRow(532, { title: 'Leaderboard & chat', meta: 'Anonymous · chat on · full posts' }),
+      section(604, 'JOINING'),
+      settingRow(614, { title: 'Allow joining after start', control: 'on', h: 46 }),
+      settingRow(666, { title: 'Max players', value: 'Unlimited', h: 46 }),
+      variantPanel(20, 724, 350, 106, 'VARIANT: DURING PLAY (HOST)'),
+      settingRow(758, { title: 'Slots', value: '5', control: 'locked', h: 44 }),
+      text(34, 820, 'Live rows stay editable; each change is posted to chat.', { size: 11, fill: C.muted }),
+    ].join(''),
+  },
+  {
+    file: '15-cooldown-settings.svg',
+    title: 'Cooldown settings',
+    description: 'Cooldown base time, scaling (fixed, multiply, add), multiplier or step, cap, failure toggle, sequence preview and cooldowns-off variant.',
+    body: () => [
+      statusBar(),
+      header({ title: 'Cooldowns', back: true, actions: [{ label: 'Done' }] }),
+      settingRow(112, { title: 'Base time', meta: '0 turns cooldowns off', value: '5 min', control: 'stepper' }),
+      section(186, 'SCALING'),
+      segmented(20, 196, 350, ['Fixed', 'Multiply', 'Add'], 1),
+      settingRow(244, { title: 'Multiplier', meta: 'Each result multiplies the wait', value: 'x2', control: 'stepper' }),
+      text(20, 314, 'Add shows Step (default 5 min) instead. Fixed hides both.', { size: 12, fill: C.muted }),
+      settingRow(326, { title: 'Cap', meta: 'Longest single wait (or none)', value: '6 h', control: 'stepper' }),
+      settingRow(384, { title: 'Failures advance cooldown', meta: 'Off: only successes count', control: 'on' }),
+      section(458, 'PREVIEW · WAIT AFTER EACH RESULT'),
+      chips(20, 468, 350, ['5m', '10m', '20m', '40m', '1h 20m', '2h 40m', '5h 20m', '6h', '6h'].map((label) => ({ label }))),
+      text(20, 572, 'Several slots can cool down at once; every result moves you to the next wait.', { size: 12, fill: C.body, width: 350 }),
+      variantPanel(20, 606, 350, 112, 'VARIANT: COOLDOWNS OFF'),
+      settingRow(642, { title: 'Base time', meta: 'Slots refill immediately', value: 'Off', control: 'stepper' }),
+      text(34, 710, 'Scaling, cap and preview are hidden.', { size: 11, fill: C.muted }),
+      note(20, 732, 350, 'Editable during play by the host. Only cooldowns started after the change use the new times; the change is posted to chat.'),
+    ].join(''),
+  },
+  {
+    file: '16-target-settings.svg',
+    title: 'Target settings',
+    description: 'Repeat rule for who can be named on a success: cycle everyone, X different in blocks, X different sliding, or no restriction.',
+    body: () => [
+      statusBar(),
+      header({ title: 'Targets', back: true, actions: [{ label: 'Done' }] }),
+      text(20, 126, 'Who can you name as the person you got?', { size: 14, fill: C.body }),
+      radioRow(142, { title: 'Cycle everyone', meta: 'Get every player once, then start again', selected: true }),
+      radioRow(202, { title: 'X different, then reset', meta: 'Blocks: hit X people, then the list clears' }),
+      radioRow(262, { title: 'Not your last X targets', meta: 'Sliding: your last X cannot repeat' }),
+      radioRow(322, { title: 'No restriction', meta: 'Anyone except yourself' }),
+      settingRow(394, { title: 'X (different players)', meta: 'Shown only for the two X rules', value: '3', control: 'stepper' }),
+      section(474, 'EXAMPLE · NOT YOUR LAST 3'),
+      chips(20, 484, 350, [
+        { label: 'Lee · recent', disabled: true }, { label: 'Ari · recent', disabled: true },
+        { label: 'Jo · recent', disabled: true }, { label: 'Kim' }, { label: 'Max' },
+      ]),
+      text(20, 584, 'Lee, Ari and Jo were your last 3 targets, so only Kim or Max count now.', { size: 12, fill: C.body, width: 350 }),
+      note(20, 626, 350, 'Group is allowed only for missions marked Group OK in the pack and never counts toward these rules. Sliding X is capped at players minus one. Locked once the game starts.'),
+    ].join(''),
+  },
+  {
+    file: '17-scoring-ending.svg',
+    title: 'Scoring and ending settings',
+    description: 'Failure points, negative score toggle, time limit, first-to-X score target and whether reaching it ends the game.',
+    body: () => [
+      statusBar(),
+      header({ title: 'Scoring & ending', back: true, actions: [{ label: 'Done' }] }),
+      section(124, 'SCORING'),
+      text(20, 148, 'Completed mission = +1 point', { size: 13, fill: C.body }),
+      text(20, 178, 'Failed mission', { size: 14, weight: 600, fill: C.ink }),
+      segmented(20, 188, 350, ['0 points', '-1 point'], 0),
+      settingRow(236, { title: 'Allow negative scores', meta: 'Only with -1. Off: scores stop at 0', control: 'off' }),
+      section(314, 'ENDING'),
+      text(20, 336, 'The host can always end the game.', { size: 12, fill: C.muted }),
+      settingRow(348, { title: 'Time limit', meta: 'Ends at start + limit', value: 'None' }),
+      settingRow(406, { title: 'First to X points', meta: 'Winner = first to reach X', value: 'None' }),
+      variantPanel(20, 476, 350, 196, 'VARIANT: FIRST TO 10 SET'),
+      settingRow(512, { title: 'First to X points', meta: 'Winner = first to reach X', value: '10', control: 'stepper' }),
+      settingRow(570, { title: 'Reaching X ends the game', meta: 'Off: play on until host or time', control: 'on' }),
+      text(34, 644, 'Lowering X to or below a current score triggers the win at once.', { size: 11, fill: C.muted, width: 320 }),
+      note(20, 688, 350, 'Time limit and first-to-X can change during play (a new end time must be in the future). Failure points and negative scores are locked once the game starts.'),
+    ].join(''),
+  },
+  {
+    file: '18-leaderboard-chat.svg',
+    title: 'Leaderboard and chat settings',
+    description: 'Leaderboard mode, player chat, result post style and names, with the irreversible switch-to-nicknames warning variant.',
+    body: () => [
+      statusBar(),
+      header({ title: 'Leaderboard & chat', back: true, actions: [{ label: 'Done' }] }),
+      section(124, 'LEADERBOARD DURING PLAY'),
+      segmented(20, 134, 350, ['Off', 'Anonymous', 'Nicknames'], 1),
+      text(20, 192, 'Full standings with nicknames are always revealed when the game ends.', { size: 12, fill: C.muted, width: 350 }),
+      section(236, 'CHAT'),
+      settingRow(246, { title: 'Player chat', meta: 'Off: read-only feed of results', control: 'on' }),
+      text(20, 324, 'Result posts', { size: 14, weight: 600, fill: C.ink }),
+      segmented(20, 334, 350, ['Full mission', 'Generic', 'Off'], 0),
+      text(20, 390, 'Generic: "CheeryTiger42 completed a mission". Locked once started.', { size: 12, fill: C.muted, width: 350 }),
+      settingRow(420, { title: 'Names in result posts', meta: 'Used when the leaderboard is off', value: 'Aliases' }),
+      text(20, 494, 'Otherwise posts follow the leaderboard names.', { size: 12, fill: C.muted }),
+      variantPanel(20, 516, 350, 204, 'VARIANT: SWITCH TO NICKNAMES IN PLAY'),
+      rect(40, 546, 310, 160, { fill: C.paper, stroke: C.ink, r: 12 }),
+      text(56, 574, 'Show real names?', { size: 16, weight: 700, fill: C.ink }),
+      text(56, 596, 'Everyone will see who is behind each alias, including earlier result posts. Phones that already loaded names keep them.', { size: 12, fill: C.body, width: 280 }),
+      button(56, 656, 130, 'Cancel', { h: 36 }),
+      button(198, 656, 136, 'Show names', { variant: 'primary', h: 36 }),
+      note(20, 736, 350, 'Leaderboard mode, player chat and post names can change during play and are announced in chat. With chat and result posts both off, Chat is hidden.'),
     ].join(''),
   },
 ];

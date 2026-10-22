@@ -29,6 +29,10 @@
   Never log/store raw bearer secrets server-side or commit credentials.
 - Every game relationship and query must be game-scoped. Use transactions and
   database constraints for claims, resolution, retry safety and cleanup.
+- New or changed game rules are per-game settings with a default that keeps
+  the current behaviour. Update `game_settings`, [game rules](docs/game-rules.md#game-settings),
+  database docs and the settings wireframes together; say whether the setting
+  is live-editable.
 - Preserve intended privacy: no cross-game identity, public private-pack catalog,
   permanent server game history, or other players' secret assignment payloads.
 

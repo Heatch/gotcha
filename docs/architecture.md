@@ -62,12 +62,23 @@ mission text at that point, not the assignments or other players' private data.
 There is no collaboration or public user-created pack discovery. Saving is
 never assumed, and the resulting copy has its own owner secret.
 
+## Game settings
+
+Each game owns one `game_settings` row chosen by its host: wallet size, offer
+size, rerolls, cooldown curve, target repeat rule, scoring, time limit and
+first-to-X target, leaderboard/result-post identity, chat and joining limits.
+Defaults reproduce the original game, so "Create game" works without opening
+settings. Everything is editable in the lobby; after start only the live subset
+can change, and each change is announced in chat. The server validates and
+applies every rule; devices only present the choices. See
+[game rules](game-rules.md#game-settings).
+
 ## Game lifetime
 
 ```text
-lobby --host starts--> active --host ends--> ended --7 days--> purged
+lobby --host starts--> active --host ends / time limit / first to X--> ended --7 days--> purged
   |                     |
-  +--30 days inactive---+-------------------------------> purged
+  +--30 days inactive---+-------------------------------------------------------------> purged
 ```
 
 Accepted joins/configuration/gameplay/chat writes update activity and the

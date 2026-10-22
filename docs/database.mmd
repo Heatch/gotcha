@@ -20,6 +20,7 @@ erDiagram
         binary16 pack_id FK
         int position UK "Unique per pack"
         string mission_text
+        boolean allows_group "Group target OK"
     }
     games {
         binary16 id PK
@@ -28,8 +29,36 @@ erDiagram
         enum state "lobby | active | ended"
         string frozen_pack_title
         bigint revision
+        datetime scheduled_end_at "Time limit, set at start"
+        enum end_reason "host | time_limit | score_target"
         datetime last_activity_at
         datetime expires_at
+    }
+    game_settings {
+        binary16 game_id PK,FK "One row per game"
+        tinyint slot_count "1-10, default 5"
+        tinyint offer_size "1-3, default 2"
+        tinyint rerolls_per_player "0-10, default 0"
+        smallint cooldown_base_minutes "0 = off, default 5"
+        enum cooldown_scaling "fixed | multiply | add"
+        decimal cooldown_multiplier "Default 2.00"
+        smallint cooldown_step_minutes "Add mode step"
+        smallint cooldown_cap_minutes "Null = no cap, default 360"
+        boolean cooldown_counts_failures
+        enum target_rule "cycle_all | distinct_blocks | distinct_sliding | unrestricted"
+        tinyint target_distinct_count "X for distinct rules"
+        tinyint failure_points "0 or -1"
+        boolean allow_negative_score
+        int time_limit_minutes
+        smallint win_score_target "First to X score"
+        boolean win_ends_game
+        enum leaderboard_mode "off | anonymous | nicknames"
+        boolean chat_enabled
+        enum result_posts "full | generic | off"
+        enum result_names_when_board_off "alias | nickname"
+        boolean allow_late_join
+        smallint max_players
+        bigint revision
     }
     game_players {
         binary16 id PK
@@ -38,7 +67,10 @@ erDiagram
         string leaderboard_alias UK "Unique per game"
         binary32 membership_secret_hash UK
         enum role "One host per game"
-        bigint resolution_count
+        bigint cooldown_level "Advances per counted result"
+        int score
+        tinyint rerolls_used
+        datetime score_target_reached_at
         bigint target_cycle
     }
     game_missions {
@@ -46,11 +78,12 @@ erDiagram
         binary16 game_id FK
         int position UK "Unique per game"
         string mission_text "Immutable snapshot"
+        boolean allows_group
     }
     player_slots {
         binary16 game_id PK,FK
         binary16 player_id PK,FK
-        tinyint slot_number PK "1 through 5"
+        tinyint slot_number PK "1 through slot_count (max 10)"
         datetime cooldown_until
     }
     mission_assignments {
@@ -70,13 +103,13 @@ erDiagram
         binary16 player_id FK
         tinyint slot_number FK
         enum phase "initial | refill"
-        enum state "One current per player"
+        enum state "current | consumed | superseded | rerolled"
         binary16 consumed_assignment_id FK
     }
     selection_offer_items {
         binary16 game_id PK,FK
         binary16 offer_id PK,FK
-        tinyint position PK "1 through 2"
+        tinyint position PK "1 through offer_size (max 3)"
         binary16 game_mission_id FK
     }
     player_target_hits {
@@ -90,14 +123,14 @@ erDiagram
         bigint id PK "Cursor"
         binary16 game_id FK
         binary16 sender_player_id FK "Chat only"
-        enum kind "chat | mission_completed | mission_failed"
+        enum kind "chat | mission_completed | mission_failed | settings_changed"
         binary16 assignment_id FK,UK "Result messages only"
     }
     mutation_receipts {
         binary16 game_id PK,FK
         binary16 player_id PK,FK
         string request_id PK
-        enum action "claim | resolve | save_pack"
+        enum action "claim | resolve | reroll | update_settings | save_pack"
         binary32 request_fingerprint
         binary16 result_resource_id "No FK: copies may be deleted"
         bigint result_revision
@@ -105,15 +138,16 @@ erDiagram
 
     mission_packs ||--o{ missions : contains
     mission_packs ||--o| games : "isolated draft"
+    games ||--|| game_settings : configures
     games ||--o{ game_players : admits
     games ||--o{ game_missions : freezes
-    game_players ||--|{ player_slots : "five slots"
+    game_players ||--|{ player_slots : "slot_count slots"
     game_missions ||--o| mission_assignments : "claimed once"
     player_slots ||--o{ mission_assignments : history
     game_players o|--o{ mission_assignments : "individual target"
     player_slots ||--o{ selection_offers : offers
     mission_assignments o|--o{ selection_offers : "consumed result"
-    selection_offers ||--o{ selection_offer_items : "up to two"
+    selection_offers ||--o{ selection_offer_items : "up to offer_size"
     game_missions ||--o{ selection_offer_items : candidate
     game_players ||--o{ player_target_hits : actor
     game_players ||--o{ player_target_hits : target

@@ -29,13 +29,15 @@ CREATE TABLE missions (
     pack_id BINARY(16) NOT NULL,
     position INT UNSIGNED NOT NULL,
     mission_text VARCHAR(1000) NOT NULL,
+    allows_group BOOLEAN NOT NULL DEFAULT FALSE,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uq_mission_position (pack_id, position),
     CONSTRAINT fk_mission_pack FOREIGN KEY (pack_id) REFERENCES mission_packs (id),
     CONSTRAINT ck_mission_position CHECK (position >= 1),
-    CONSTRAINT ck_mission_text CHECK (CHAR_LENGTH(TRIM(mission_text)) > 0)
+    CONSTRAINT ck_mission_text CHECK (CHAR_LENGTH(TRIM(mission_text)) > 0),
+    CONSTRAINT ck_mission_group CHECK (allows_group IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
 CREATE TABLE games (
@@ -45,39 +47,96 @@ CREATE TABLE games (
     state ENUM('lobby', 'active', 'ended') NOT NULL DEFAULT 'lobby',
     frozen_pack_title VARCHAR(120) NULL,
     frozen_pack_description VARCHAR(2000) NULL,
-    slot_count TINYINT UNSIGNED NOT NULL DEFAULT 5,
-    cooldown_base_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 5,
-    cooldown_multiplier TINYINT UNSIGNED NOT NULL DEFAULT 2,
-    cooldown_cap_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 360,
     revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     started_at DATETIME(3) NULL,
+    scheduled_end_at DATETIME(3) NULL,
     ended_at DATETIME(3) NULL,
+    end_reason ENUM('host', 'time_limit', 'score_target') NULL,
     last_activity_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     expires_at DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_game_code (join_code),
     UNIQUE KEY uq_game_draft (draft_pack_id),
     KEY ix_game_expiry (state, expires_at, id),
+    KEY ix_game_scheduled_end (state, scheduled_end_at, id),
     CONSTRAINT fk_game_draft FOREIGN KEY (draft_pack_id) REFERENCES mission_packs (id),
     CONSTRAINT ck_game_code CHECK (CHAR_LENGTH(join_code) BETWEEN 8 AND 12),
-    CONSTRAINT ck_game_rules CHECK (
-        slot_count = 5 AND cooldown_base_minutes = 5
-        AND cooldown_multiplier = 2 AND cooldown_cap_minutes = 360
-    ),
     CONSTRAINT ck_game_revision CHECK (revision >= 1),
     CONSTRAINT ck_game_lifecycle CHECK (
-        (state = 'lobby' AND started_at IS NULL AND ended_at IS NULL
+        (state = 'lobby' AND started_at IS NULL AND ended_at IS NULL AND end_reason IS NULL
+            AND scheduled_end_at IS NULL
             AND frozen_pack_title IS NULL AND frozen_pack_description IS NULL)
-        OR (state = 'active' AND started_at IS NOT NULL AND ended_at IS NULL
+        OR (state = 'active' AND started_at IS NOT NULL AND ended_at IS NULL AND end_reason IS NULL
             AND frozen_pack_title IS NOT NULL AND frozen_pack_description IS NOT NULL)
-        OR (state = 'ended' AND started_at IS NOT NULL AND ended_at IS NOT NULL
+        OR (state = 'ended' AND started_at IS NOT NULL AND ended_at IS NOT NULL AND end_reason IS NOT NULL
             AND frozen_pack_title IS NOT NULL AND frozen_pack_description IS NOT NULL)
     ),
+    CONSTRAINT ck_game_time_limit_end CHECK (
+        end_reason IS NULL OR end_reason <> 'time_limit' OR scheduled_end_at IS NOT NULL
+    ),
+    CONSTRAINT ck_game_schedule CHECK (scheduled_end_at IS NULL OR scheduled_end_at > started_at),
     CONSTRAINT ck_game_start_time CHECK (started_at IS NULL OR started_at >= created_at),
     CONSTRAINT ck_game_end_time CHECK (ended_at IS NULL OR ended_at >= started_at),
     CONSTRAINT ck_game_activity CHECK (last_activity_at >= created_at),
     CONSTRAINT ck_game_expiry CHECK (expires_at > last_activity_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
+
+-- Host-chosen rules, one row per game. Defaults reproduce the original fixed rules.
+CREATE TABLE game_settings (
+    game_id BINARY(16) NOT NULL,
+    slot_count TINYINT UNSIGNED NOT NULL DEFAULT 5,
+    offer_size TINYINT UNSIGNED NOT NULL DEFAULT 2,
+    rerolls_per_player TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    cooldown_base_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 5,
+    cooldown_scaling ENUM('fixed', 'multiply', 'add') NOT NULL DEFAULT 'multiply',
+    cooldown_multiplier DECIMAL(3,2) NOT NULL DEFAULT 2.00,
+    cooldown_step_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 5,
+    cooldown_cap_minutes SMALLINT UNSIGNED NULL DEFAULT 360,
+    cooldown_counts_failures BOOLEAN NOT NULL DEFAULT TRUE,
+    target_rule ENUM('cycle_all', 'distinct_blocks', 'distinct_sliding', 'unrestricted') NOT NULL DEFAULT 'cycle_all',
+    target_distinct_count TINYINT UNSIGNED NULL,
+    failure_points TINYINT NOT NULL DEFAULT 0,
+    allow_negative_score BOOLEAN NOT NULL DEFAULT FALSE,
+    time_limit_minutes INT UNSIGNED NULL,
+    win_score_target SMALLINT UNSIGNED NULL,
+    win_ends_game BOOLEAN NOT NULL DEFAULT TRUE,
+    leaderboard_mode ENUM('off', 'anonymous', 'nicknames') NOT NULL DEFAULT 'anonymous',
+    chat_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    result_posts ENUM('full', 'generic', 'off') NOT NULL DEFAULT 'full',
+    result_names_when_board_off ENUM('alias', 'nickname') NOT NULL DEFAULT 'alias',
+    allow_late_join BOOLEAN NOT NULL DEFAULT TRUE,
+    max_players SMALLINT UNSIGNED NULL,
+    revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (game_id),
+    CONSTRAINT fk_settings_game FOREIGN KEY (game_id) REFERENCES games (id),
+    CONSTRAINT ck_settings_wallet CHECK (
+        slot_count BETWEEN 1 AND 10 AND offer_size BETWEEN 1 AND 3
+        AND rerolls_per_player BETWEEN 0 AND 10
+    ),
+    CONSTRAINT ck_settings_cooldown CHECK (
+        cooldown_base_minutes <= 1440
+        AND cooldown_multiplier BETWEEN 1.10 AND 5.00
+        AND cooldown_step_minutes BETWEEN 1 AND 1440
+        AND (cooldown_cap_minutes IS NULL OR cooldown_cap_minutes BETWEEN 1 AND 10080)
+    ),
+    CONSTRAINT ck_settings_targets CHECK (
+        (target_rule IN ('cycle_all', 'unrestricted') AND target_distinct_count IS NULL)
+        OR (target_rule IN ('distinct_blocks', 'distinct_sliding')
+            AND target_distinct_count IS NOT NULL AND target_distinct_count BETWEEN 1 AND 99)
+    ),
+    CONSTRAINT ck_settings_scoring CHECK (failure_points IN (0, -1)),
+    CONSTRAINT ck_settings_ending CHECK (
+        (time_limit_minutes IS NULL OR time_limit_minutes BETWEEN 10 AND 43200)
+        AND (win_score_target IS NULL OR win_score_target BETWEEN 1 AND 999)
+    ),
+    CONSTRAINT ck_settings_joining CHECK (max_players IS NULL OR max_players BETWEEN 2 AND 200),
+    CONSTRAINT ck_settings_flags CHECK (
+        cooldown_counts_failures IN (0, 1) AND allow_negative_score IN (0, 1)
+        AND win_ends_game IN (0, 1) AND chat_enabled IN (0, 1) AND allow_late_join IN (0, 1)
+    ),
+    CONSTRAINT ck_settings_revision CHECK (revision >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
 CREATE TABLE game_players (
@@ -92,7 +151,10 @@ CREATE TABLE game_players (
     host_game_id BINARY(16)
         GENERATED ALWAYS AS (CASE WHEN role = 'host' THEN game_id ELSE NULL END) STORED,
     selection_complete BOOLEAN NOT NULL DEFAULT FALSE,
-    resolution_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    cooldown_level BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    score INT NOT NULL DEFAULT 0,
+    rerolls_used TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    score_target_reached_at DATETIME(3) NULL,
     target_cycle BIGINT UNSIGNED NOT NULL DEFAULT 1,
     joined_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
@@ -101,6 +163,7 @@ CREATE TABLE game_players (
     UNIQUE KEY uq_player_alias (game_id, leaderboard_alias),
     UNIQUE KEY uq_player_secret (membership_secret_hash),
     UNIQUE KEY uq_game_host (host_game_id),
+    KEY ix_player_score (game_id, score),
     CONSTRAINT fk_player_game FOREIGN KEY (game_id) REFERENCES games (id),
     CONSTRAINT ck_player_nickname CHECK (
         CHAR_LENGTH(TRIM(nickname)) > 0
@@ -108,7 +171,11 @@ CREATE TABLE game_players (
     ),
     CONSTRAINT ck_player_alias CHECK (CHAR_LENGTH(TRIM(leaderboard_alias)) > 0),
     CONSTRAINT ck_player_selection CHECK (selection_complete IN (0, 1)),
-    CONSTRAINT ck_player_cycle CHECK (target_cycle >= 1)
+    CONSTRAINT ck_player_cycle CHECK (target_cycle >= 1),
+    CONSTRAINT ck_player_rerolls CHECK (rerolls_used <= 10),
+    CONSTRAINT ck_player_target_time CHECK (
+        score_target_reached_at IS NULL OR score_target_reached_at >= joined_at
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
 CREATE TABLE game_missions (
@@ -116,12 +183,14 @@ CREATE TABLE game_missions (
     game_id BINARY(16) NOT NULL,
     position INT UNSIGNED NOT NULL,
     mission_text VARCHAR(1000) NOT NULL,
+    allows_group BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id),
     UNIQUE KEY uq_game_mission_scope (game_id, id),
     UNIQUE KEY uq_game_mission_position (game_id, position),
     CONSTRAINT fk_game_mission_game FOREIGN KEY (game_id) REFERENCES games (id),
     CONSTRAINT ck_game_mission_position CHECK (position >= 1),
-    CONSTRAINT ck_game_mission_text CHECK (CHAR_LENGTH(TRIM(mission_text)) > 0)
+    CONSTRAINT ck_game_mission_text CHECK (CHAR_LENGTH(TRIM(mission_text)) > 0),
+    CONSTRAINT ck_game_mission_group CHECK (allows_group IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
 CREATE TABLE player_slots (
@@ -132,7 +201,7 @@ CREATE TABLE player_slots (
     PRIMARY KEY (game_id, player_id, slot_number),
     CONSTRAINT fk_slot_player FOREIGN KEY (game_id, player_id)
         REFERENCES game_players (game_id, id),
-    CONSTRAINT ck_slot_number CHECK (slot_number BETWEEN 1 AND 5)
+    CONSTRAINT ck_slot_number CHECK (slot_number BETWEEN 1 AND 10)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
 CREATE TABLE mission_assignments (
@@ -187,7 +256,7 @@ CREATE TABLE selection_offers (
     player_id BINARY(16) NOT NULL,
     slot_number TINYINT UNSIGNED NOT NULL,
     phase ENUM('initial', 'refill') NOT NULL,
-    state ENUM('current', 'consumed', 'superseded') NOT NULL DEFAULT 'current',
+    state ENUM('current', 'consumed', 'superseded', 'rerolled') NOT NULL DEFAULT 'current',
     current_player_id BINARY(16)
         GENERATED ALWAYS AS (CASE WHEN state = 'current' THEN player_id ELSE NULL END) STORED,
     revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
@@ -207,7 +276,7 @@ CREATE TABLE selection_offers (
     CONSTRAINT ck_offer_state CHECK (
         (state = 'current' AND consumed_assignment_id IS NULL AND closed_at IS NULL)
         OR (state = 'consumed' AND consumed_assignment_id IS NOT NULL AND closed_at IS NOT NULL)
-        OR (state = 'superseded' AND consumed_assignment_id IS NULL AND closed_at IS NOT NULL)
+        OR (state IN ('superseded', 'rerolled') AND consumed_assignment_id IS NULL AND closed_at IS NOT NULL)
     ),
     CONSTRAINT ck_offer_time CHECK (closed_at IS NULL OR closed_at >= created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
@@ -224,7 +293,7 @@ CREATE TABLE selection_offer_items (
         REFERENCES selection_offers (game_id, id),
     CONSTRAINT fk_offer_item_mission FOREIGN KEY (game_id, game_mission_id)
         REFERENCES game_missions (game_id, id),
-    CONSTRAINT ck_offer_item_position CHECK (position BETWEEN 1 AND 2)
+    CONSTRAINT ck_offer_item_position CHECK (position BETWEEN 1 AND 3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
 CREATE TABLE player_target_hits (
@@ -252,8 +321,8 @@ CREATE TABLE game_messages (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     game_id BINARY(16) NOT NULL,
     sender_player_id BINARY(16) NULL,
-    kind ENUM('chat', 'mission_completed', 'mission_failed') NOT NULL,
-    message_text VARCHAR(2000) NOT NULL,
+    kind ENUM('chat', 'mission_completed', 'mission_failed', 'settings_changed') NOT NULL,
+    message_text VARCHAR(2000) NULL,
     assignment_id BINARY(16) NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
@@ -265,11 +334,13 @@ CREATE TABLE game_messages (
         REFERENCES game_players (game_id, id),
     CONSTRAINT fk_message_assignment FOREIGN KEY (game_id, assignment_id)
         REFERENCES mission_assignments (game_id, id),
-    CONSTRAINT ck_message_text CHECK (CHAR_LENGTH(TRIM(message_text)) > 0),
     CONSTRAINT ck_message_kind CHECK (
-        (kind = 'chat' AND sender_player_id IS NOT NULL AND assignment_id IS NULL)
+        (kind = 'chat' AND sender_player_id IS NOT NULL AND assignment_id IS NULL
+            AND message_text IS NOT NULL AND CHAR_LENGTH(TRIM(message_text)) > 0)
+        OR (kind = 'settings_changed' AND sender_player_id IS NULL AND assignment_id IS NULL
+            AND message_text IS NOT NULL AND CHAR_LENGTH(TRIM(message_text)) > 0)
         OR (kind IN ('mission_completed', 'mission_failed')
-            AND sender_player_id IS NULL AND assignment_id IS NOT NULL)
+            AND sender_player_id IS NULL AND assignment_id IS NOT NULL AND message_text IS NULL)
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_cs;
 
@@ -277,7 +348,7 @@ CREATE TABLE mutation_receipts (
     game_id BINARY(16) NOT NULL,
     player_id BINARY(16) NOT NULL,
     request_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    action ENUM('claim', 'resolve', 'save_pack') NOT NULL,
+    action ENUM('claim', 'resolve', 'reroll', 'update_settings', 'save_pack') NOT NULL,
     request_fingerprint BINARY(32) NOT NULL,
     result_resource_id BINARY(16) NOT NULL,
     result_revision BIGINT UNSIGNED NOT NULL,
